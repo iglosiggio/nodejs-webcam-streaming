@@ -10,7 +10,7 @@ const index = require('fs')
   .replace(/{{webcam_endpoint}}/, webcam_endpoint);
 
 const command = 'avconv';
-const flags = '-f video4linux2 -i /dev/video0 -f webm pipe:1'.split(' ');
+const flags = '-f video4linux2 -i /dev/video0 -f webm -deadline realtime pipe:1'.split(' ');
 
 const server = http((req, res) => {
   console.log('[REQUEST] %s %s', req.method, req.url);
