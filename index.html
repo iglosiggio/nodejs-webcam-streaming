@@ -2,11 +2,30 @@
 <head>
   <title>WEBCAM STREAMING EXPERIMENTAL</title>
   <script type="text/javascript">
-    const video = document.getElementById('webcam');
+    const request = new XMLHttpRequest();
+    const webcam = '/dev/video0';
+    const get_key_endpoint = '{{get_key_endpoint}}';
+    const webcam_endpoint = '{{webcam_endpoint}}';
+
+    request.open('GET', `${get_key_endpoint}?webcam=${webcam}`);
+    request.responseType = 'json';
+    request.onload = () => {
+      const res = request.response;
+      const uuid = res.key;
+
+      if(res.error) {
+        console.error(res);
+      } else {
+        const video = document.getElementById('webcam');
+        video.src = `${webcam_endpoint}?webcam=${webcam}&uuid=${uuid}`;
+        video.play();
+      }
+    }
+    request.send();
   </script>
 </head>
 <body>
   <h1>Webcam streaming via node.js</h1>
-  <video id="webcam" src="{{webcam_endpoint}}" autoplay/>
+  <video id="webcam"/>
 </body>
 </html>

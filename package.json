@@ -1,0 +1,35 @@
+{
+  "name": "webcam-http-streaming",
+  "version": "0.1.0",
+  "description": "Simple wrapper around ffmpeg for http webcam streaming (REST api)",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/iglosiggio/nodejs-webcam-streaming.git"
+  },
+  "keywords": [
+    "webcam",
+    "ffmpeg",
+    "avlib",
+    "streaming",
+    "http",
+    "rest",
+    "wrapper",
+    "simple"
+  ],
+  "author": {
+    "name": "Ignacio E. Losiggio",
+    "email": "iglosiggio@gmail.com"
+  },
+  "license": "Unlicense",
+  "bugs": {
+    "url": "https://github.com/iglosiggio/nodejs-webcam-streaming/issues"
+  },
+  "homepage": "https://github.com/iglosiggio/nodejs-webcam-streaming#readme",
+  "dependencies": {
+    "uuid": "^3.0.1"
+  }
+}
