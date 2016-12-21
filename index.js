@@ -66,6 +66,15 @@ function isValidWebcamDefault(webcam) {
   });
 }
 
+/* Returns the isValidWebcam for a given whitelist */
+function isValidWebcamWhitelist(whitelistArray) {
+  const whitelist = {};
+  /* We create the map*/
+  whitelistArray.forEach((webcam) => whitelist[webcam] = 'valid');
+
+  return (webcam) => new Promise((accept, reject) => webcam in whitelist? accept(true) : reject(false));
+}
+
 function defaultPage(req, res, req_url) {
   res.writeHead(404);
   res.end(`
@@ -141,6 +150,10 @@ const createHTTPStreamingServer = exports.createHTTPStreamingServer = ({
  };
 
  additionalEndpoints.default = additionalEndpoints.default || defaultPage;
+
+ if(permittedWebcams) {
+   isValidWebcam = isValidWebcamWhitelist(permittedWebcams);
+ }
 
  const server = http((req, res) => {
    const reqUrl = parseUrl(req.url, true);
