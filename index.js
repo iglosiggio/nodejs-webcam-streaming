@@ -31,16 +31,19 @@ const defaultEncoder = {
    *  This default isn't perfect but covers most of the cases
    */
   isSuccessful(encoderProcess, cb) {
+    let started = false;
     encoderProcess.stderr.setEncoding('utf8');
     encoderProcess.stderr.on('data', (data) => {
       /* I trust that the output is line-buffered */
-      const error = /\/dev\/video[0-9]+: Input\/output error/;
-      const started = /Press ctrl-c to stop encoding/;
-      if(started.test(data)) {
+      const startedText = /Press ctrl-c to stop encoding/;
+      if(startedText.test(data)) {
         cb(true);
-      } else if(error.test(data)) {
-        cb(false);
+        started = true;
       }
+    });
+    /* If the process start was not detected and it exited it's surely a failure */
+    encoderProcess.on('exit', () => {
+      if(!started) cb(false);
     });
   }
 };
@@ -78,6 +81,7 @@ function isValidWebcamWhitelist(whitelistArray) {
 function defaultPage(req, res, req_url) {
   res.writeHead(404);
   res.end(`
+    <!DOCTYPE html>
     <html>
       <head><title>４０４　ｎｏｔ－ｆｏｕｎｄ</title></head>
       <body><p>Ｓｏｒｒｙ，　ｗｅ　ｄｏｎ＇ｔ　ｋｎｏｗ　ｗｈａｔ　ｔｏ　ｄｏ</p></body>
