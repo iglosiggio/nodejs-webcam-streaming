@@ -12,6 +12,12 @@ const defaultEncoder = {
   /*
    * Function that returns the required flags, the video is expected to be
    * written to stdout
+   *
+   * Note: for video size you have to use a string like
+   *   `-f video4linux2 -video_size 1280x960 -i ${webcam} -f webm -deadline realtime pipe:1`
+   * The other option is to scan the available resolutions and choose one based
+   * on certain policy, the avlib/ffmpeg command for this is
+   *   `-f video4linux2 -list_formats all -i ${webcam}`
    */
   flags(webcam) {
     return `-f video4linux2 -i ${webcam} -f webm -deadline realtime pipe:1`;
