@@ -7,20 +7,17 @@ const messages = require('./rest_messages');
 const defaultEncoder = {
   /*
    * encoder command or location
-   *   Default: avconv
    */
-  command: 'ffmpeg',
+  command: 'avconv',
   /*
    * Function that returns the required flags, the video is expected to be
    * written to stdout
-   *   Default: shown below
    */
   flags(webcam) {
     return `-f video4linux2 -i ${webcam} -f webm -deadline realtime pipe:1`;
   },
   /*
    * MIME type of the output stream
-   *   Default: 'video/webm'
    */
   mimeType: 'video/webm',
   /*
@@ -31,7 +28,7 @@ const defaultEncoder = {
    *
    * encoderProcess is of type ChildProcess
    *
-   *  Default: shown below, it isn't perfect but covers most of the cases
+   *  This default isn't perfect but covers most of the cases
    */
   isSuccessful(encoderProcess, cb) {
     encoderProcess.stderr.setEncoding('utf8');
@@ -70,8 +67,8 @@ function isValidWebcamDefault(webcam) {
 }
 
 function defaultPage(req, res, req_url) {
-  req.writeHead(404);
-  req.end(`
+  res.writeHead(404);
+  res.end(`
     <html>
       <head><title>４０４　ｎｏｔ－ｆｏｕｎｄ</title></head>
       <body><p>Ｓｏｒｒｙ，　ｗｅ　ｄｏｎ＇ｔ　ｋｎｏｗ　ｗｈａｔ　ｔｏ　ｄｏ</p></body>
@@ -93,48 +90,57 @@ function message(res, code, ...args) {
   res.end(response);
 }
 
-exports.streamWebcam = (webcam, {
+/*
+ * This is the internal streamWebcam function, the returned promise resolves to
+ * the spawned process
+ */
+function streamWebcam(webcam, {
   command = defaultEncoder.command,
   flags = defaultEncoder.flags,
   isSuccessful = defaultEncoder.isSuccessful
-}) => {
-  const videoEncoder = spawn(command, flags(webcam));
+} = {}) {
+  const encoderFlags = flags(webcam).split(' ');
+  const videoEncoder = spawn(command, encoderFlags);
 
   return new Promise((accept, reject) => {
     /* Called when is determined if the encoder has succeeded */
     function resolveSucess(hasSucceeded) {
-      if(hasSucceeded === true) accept(videoEncoder.stdout);
+      if(hasSucceeded === true) accept(videoEncoder);
       else reject(hasSucceeded);
     }
 
     isSuccessful(videoEncoder, resolveSucess);
   });
-};
+}
 
-exports.createHTTPStreamingServer = ({
+exports.streamWebcam = (encoder) =>
+  streamWebcam(encoder).then((encoderProcess) => encoderProcess.stdout);
+
+const createHTTPStreamingServer = exports.createHTTPStreamingServer = ({
   permittedWebcams,
   isValidWebcam = isValidWebcamDefault,
   webcamEndpoint = '/webcam',
   additionalEndpoints = {},
   encoder = defaultEncoder
-}) => {
+} = {}) => {
  additionalEndpoints[webcamEndpoint] = (req, res, reqUrl) => {
    const webcam = reqUrl.query.webcam;
    fillDefaults(encoder, defaultEncoder);
 
-   isValidWebcam(webcam).then(() =>
-     streamWebcam(webcam, encoder).then((video) => {
-       res.writeHead(200, { 'Content-Type': encoder.mimeType });
-       video.pipe(res);
+   isValidWebcam(webcam).then(
+     () => streamWebcam(webcam, encoder).then(
+       (encoderProcess) => {
+         const video = encoderProcess.stdout;
 
-       res.on('close', () => videoEncoder.kill('SIGTERM'));
-     }).catch(() => message(res, 'webcam_in_use', webcam))
-   ).catch(() => {
-     message(res, 'invalid_webcam', webcam);
-   });
+         res.writeHead(200, { 'Content-Type': encoder.mimeType });
+         video.pipe(res);
+
+         res.on('close', () => encoderProcess.kill('SIGTERM'));
+       }, () => message(res, 'webcam_in_use', webcam)),
+     () => message(res, 'invalid_webcam', webcam));
  };
 
- additionalEndpoints.default = additionalEndpoints.default || default404;
+ additionalEndpoints.default = additionalEndpoints.default || defaultPage;
 
  const server = http((req, res) => {
    const reqUrl = parseUrl(req.url, true);
