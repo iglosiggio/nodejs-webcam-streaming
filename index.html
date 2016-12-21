@@ -1,38 +1,10 @@
 <html>
 <head>
   <title>WEBCAM STREAMING EXPERIMENTAL</title>
-  <script type="text/javascript">
-    const request = new XMLHttpRequest();
-    const webcam = '/dev/video0';
-    const get_key_endpoint = '{{get_key_endpoint}}';
-    const webcam_endpoint = '{{webcam_endpoint}}';
-    const log = console.log;
-    const error = console.error;
-
-    request.open('GET', `${get_key_endpoint}?webcam=${webcam}`);
-    request.responseType = 'json';
-    request.onload = () => {
-      const res = request.response;
-      const uuid = res.key;
-
-      if(res.error) {
-        error(`[ERROR:${res.code}] ${res.error}`);
-      } else {
-        const video = document.getElementById('webcam');
-        video.src = `${webcam_endpoint}?webcam=${webcam}&uuid=${uuid}`;
-        video.play();
-
-        log(`Iniciando la reproducción del video desde ${video.src}`);
-      }
-    }
-    request.send();
-
-    log(`Pidiendo permiso para la cámara ${webcam}`);
-  </script>
 </head>
 <body>
   <h1>Webcam streaming via node.js</h1>
   <pre id="log"></pre>
-  <video id="webcam"/>
+  <video id="webcam" src="/webcam?=/dev/video0"/>
 </body>
 </html>

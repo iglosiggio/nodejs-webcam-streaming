@@ -1,139 +1,147 @@
-/* REST service config */
-const host = 'localhost';
-const port = 8080;
-const webcam_endpoint = '/webcam';
-const get_key_endpoint = '/get_key';
-
-/* Multimedia framework (gstreamer, ffmpeg, avlib, etc) config */
-const command = 'avconv';
-const flags = (webcam) => ['-f', 'video4linux2', '-i', webcam, '-f', 'webm', '-deadline', 'realtime', 'pipe:1'];
-const mime_type = 'video/webm';
-
-function start_transcoding(proc) {
-  return new Promise((accept, reject) => {
-    proc.stderr.setEncoding('utf8');
-    proc.stderr.on('data', (data) => {
-      /* Confío que el output es line buffered y que no va a haber otros errores
-       *   dicho en criollo: tengo que revisar esto más tarde
-       */
-      const error = /\/dev\/video0: Input\/output error/;
-      const started = /Press ctrl-c to stop encoding/;
-      if(error.test(data)) {
-        reject(error);
-      } else if(started.test(data)) {
-        accept(proc.stdout);
-      }
-    })
-  });
-}
-
 /* Requires */
 const http = require('http').Server;
 const spawn = require('child_process').spawn;
-const parse_url = require('url').parse;
+const parseUrl = require('url').parse;
 const messages = require('./rest_messages');
-const gen_uuid = require('uuid');
 
-/* Static data */
-const index = require('fs')
-  .readFileSync('index.html')
-  .toString()
-  .replace(/{{webcam_endpoint}}/, webcam_endpoint)
-  .replace(/{{get_key_endpoint}}/, get_key_endpoint);
+const defaultEncoder = {
+  /*
+   * encoder command or location
+   *   Default: avconv
+   */
+  command: 'ffmpeg',
+  /*
+   * Function that returns the required flags, the video is expected to be
+   * written to stdout
+   *   Default: shown below
+   */
+  flags(webcam) {
+    return `-f video4linux2 -i ${webcam} -f webm -deadline realtime pipe:1`;
+  },
+  /*
+   * MIME type of the output stream
+   *   Default: 'video/webm'
+   */
+  mimeType: 'video/webm',
+  /*
+   * Function that detects the success of the encoder process,
+   * does cb(true) in case of succes, any other value for failure
+   *
+   * Calling cb more than one time has no effect
+   *
+   * encoderProcess is of type ChildProcess
+   *
+   *  Default: shown below, it isn't perfect but covers most of the cases
+   */
+  isSuccessful(encoderProcess, cb) {
+    encoderProcess.stderr.setEncoding('utf8');
+    encoderProcess.stderr.on('data', (data) => {
+      /* I trust that the output is line-buffered */
+      const error = /\/dev\/video[0-9]+: Input\/output error/;
+      const started = /Press ctrl-c to stop encoding/;
+      if(started.test(data)) {
+        cb(true);
+      } else if(error.test(data)) {
+        cb(false);
+      }
+    });
+  }
+};
 
 /* Utility functions */
-function file_exists(file) {
+function fileExists(file) {
   const access = require('fs').access;
 
   return new Promise((accept, reject) => access(file, (err) => err ? reject(false) : accept(true)));
 }
 
-function is_valid_webcam(webcam) {
-  const webcam_regex = /\/dev\/video[0-9]+/;
+function isValidWebcamDefault(webcam) {
+  const webcamRegex = /\/dev\/video[0-9]+/;
 
   return new Promise((accept, reject) => {
     /* Si no tiene pinta de webcam es un error */
-    if(!webcam_regex.test(webcam)) {
+    if(!webcamRegex.test(webcam)) {
       reject(false);
     } else {
       /* Si no existe el fichero también */
-      file_exists(webcam).then(accept, reject);
+      fileExists(webcam).then(accept, reject);
     }
   });
 }
+
+function defaultPage(req, res, req_url) {
+  req.writeHead(404);
+  req.end(`
+    <html>
+      <head><title>４０４　ｎｏｔ－ｆｏｕｎｄ</title></head>
+      <body><p>Ｓｏｒｒｙ，　ｗｅ　ｄｏｎ＇ｔ　ｋｎｏｗ　ｗｈａｔ　ｔｏ　ｄｏ</p></body>
+    </html>
+  `);
+}
+
+function fillDefaults(obj, defaults) {
+  for(var key in defaults) {
+    if(obj[key] === undefined)
+      obj[key] = defaults;
+  }
+  return obj;
+}
+
 function message(res, code, ...args) {
   const response = messages[code].apply(message, args);
   res.writeHead(200, { 'Content-Type': 'application/json' });
   res.end(response);
 }
 
-/* Service state */
-const webcam_status = {
+exports.streamWebcam = (webcam, {
+  command = defaultEncoder.command,
+  flags = defaultEncoder.flags,
+  isSuccessful = defaultEncoder.isSuccessful
+}) => {
+  const videoEncoder = spawn(command, flags(webcam));
+
+  return new Promise((accept, reject) => {
+    /* Called when is determined if the encoder has succeeded */
+    function resolveSucess(hasSucceeded) {
+      if(hasSucceeded === true) accept(videoEncoder.stdout);
+      else reject(hasSucceeded);
+    }
+
+    isSuccessful(videoEncoder, resolveSucess);
+  });
 };
 
-/* REST api dispatch table */
-const rest_api = {
-  [get_key_endpoint]: (req, res, req_url) => {
-    const webcam = req_url.query.webcam;
-    let response;
+exports.createHTTPStreamingServer = ({
+  permittedWebcams,
+  isValidWebcam = isValidWebcamDefault,
+  webcamEndpoint = '/webcam',
+  additionalEndpoints = {},
+  encoder = defaultEncoder
+}) => {
+ additionalEndpoints[webcamEndpoint] = (req, res, reqUrl) => {
+   const webcam = reqUrl.query.webcam;
+   fillDefaults(encoder, defaultEncoder);
 
-    is_valid_webcam(webcam).then(() => {
-      /* Si ya está ocupada es un error */
-      if(webcam_status[webcam]) {
-        message(res, 'already_in_use', webcam);
-        return;
-      }
-      /* Genero el uuid para la cámara */
-      let uuid = gen_uuid()
+   isValidWebcam(webcam).then(() =>
+     streamWebcam(webcam, encoder).then((video) => {
+       res.writeHead(200, { 'Content-Type': encoder.mimeType });
+       video.pipe(res);
 
-      webcam_status[webcam] = uuid; 
-      message(res, 'get_key', uuid);
-    }).catch((err) => {
-      message(res, 'malformed_webcam', webcam)
-    })
-  },
-  [webcam_endpoint]: (req, res, req_url) => {
-    const webcam = req_url.query.webcam;
-    const uuid = req_url.query.uuid;
+       res.on('close', () => videoEncoder.kill('SIGTERM'));
+     }).catch(() => message(res, 'webcam_in_use', webcam))
+   ).catch(() => {
+     message(res, 'invalid_webcam', webcam);
+   });
+ };
 
-    is_valid_webcam(webcam).then(() => {
-      /* Si ya está ocupada es un error */
-      if(webcam_status[webcam] !== uuid) {
-        message(res, 'invalid_uuid', webcam, uuid);
-        return;
-      }
-      /* Spawneo el transcoder */
-      const video_encoder = spawn(command, flags(webcam));
+ additionalEndpoints.default = additionalEndpoints.default || default404;
 
-      start_transcoding(video_encoder).then((video) => {
-        res.writeHead(200, { 'Content-Type': mime_type });
-        video.pipe(res);
+ const server = http((req, res) => {
+   const reqUrl = parseUrl(req.url, true);
+   const processRequest = additionalEndpoints[reqUrl.pathname] || additionalEndpoints.default;
 
-        res.on('close', () => {
-          video_encoder.kill('SIGTERM');
-          webcam_status[webcam] = undefined; /* Libero la webcam */
-        });
+   processRequest(req, res, reqUrl);
+ });
 
-      }).catch(() => {
-        message(res, 'already_in_use', webcam);
-      });
-    }).catch(() => {
-      message(res, 'malformed_webcam', webcam)
-    })
-  },
-  'default': (req, res) => {
-    res.end(index);
-  }
-}
-
-/* HTTP server */
-const server = http((req, res) => {
-  console.log('[REQUEST] %s %s', req.method, req.url);
-
-  const req_url = parse_url(req.url, true);
-
-  const process_request = rest_api[req_url.pathname] || rest_api.default;
-
-  process_request(req, res, req_url)
-
-}).listen(port);
+ return server;
+};

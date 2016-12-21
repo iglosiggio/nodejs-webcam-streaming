@@ -25,7 +25,7 @@ const webcam = require('webcam-http-streaming');
 
 const encoder = {
   /*
-   * Transcoder command or location
+   * encoder command or location
    *   Default: avconv
    */
   command: 'ffmpeg',
@@ -35,26 +35,26 @@ const encoder = {
    *   Default: shown below
    */
   flags(webcam) {
-    return `-f video4linux2 -i ${webcam} -f webm -deadline realtime pipe:1`,
+    return `-f video4linux2 -i ${webcam} -f webm -deadline realtime pipe:1`;
   },
   /*
    * MIME type of the output stream
    *   Default: 'video/webm'
    */
-  mime_type: 'video/webm',
+  mimeType: 'video/webm',
   /*
    * Function that detects the success of the encoder process,
    * does cb(true) in case of succes, any other value for failure
    *
    * Calling cb more than one time has no effect
    *
-   * transcoder_process is of type ChildProcess
+   * encoderProcess is of type ChildProcess
    *
    *  Default: shown below, it isn't perfect but covers most of the cases
    */
-  is_successful(transcoder_process, cb) {
-    proc.stderr.setEncoding('utf8');
-    proc.stderr.on('data', (data) => {
+  isSuccessful(encoderProcess, cb) {
+    encoderProcess.stderr.setEncoding('utf8');
+    encoderProcess.stderr.on('data', (data) => {
       /* I trust that the output is line-buffered */
       const error = /\/dev\/video[0-9]+: Input\/output error/;
       const started = /Press ctrl-c to stop encoding/;
@@ -79,27 +79,40 @@ const server = webcam.createHTTPStreamingServer({
    * below
    */
   isValidWebcam(webcam) {
-    const webcam_regex = /\/dev\/video[0-9]+/;
+    const webcamRegex = /\/dev\/video[0-9]+/;
 
     return new Promise((accept, reject) => {
       /* If doesn't seem like a video device block we will fail */
-      if(!webcam_regex.test(webcam)) {
+      if(!webcamRegex.test(webcam)) {
         reject(false);
       } else {
         /* ... and if the file doesn't exists */
-        file_exists(webcam).then(accept, reject);
+        fileExists(webcam).then(accept, reject);
       }
     });
   }
-  aditionalEndpoints: {
-    /* Custom endpoints to extend the REST API */
-    '/list_webcams': (req, res, req_url) => { res.end('<html>...</html>'); }
+  /*
+   * The endpoint for requesting streams of the REST api
+   *   Defaults to '/webcam'
+   */
+  webcamEndpoint: '/webcam',
+  /*
+   * Custom endpoints to extend the REST API
+   *   req: [IncomingMessage](https://nodejs.org/api/http.html#http_class_http_incomingmessage)
+   *   res: [ServerResponse](https://nodejs.org/api/http.html#http_class_http_serverresponse)
+   *   reqUrl: [URL Object](https://nodejs.org/api/url.html#url_url_strings_and_url_objects)
+   *            with [QueryString](https://nodejs.org/api/querystring.html#querystring_querystring_parse_str_sep_eq_options)
+   *
+   * Note: the endpoint 'default' is used for any non-matching request
+   */
+  additionalEndpoints: {
+    '/list_webcams': (req, res, reqUrl) => { res.end('<html>...</html>'); }
   },
   encoder: encoder
 }).listen(8080);
 
 /* Returns a promise that resolves to the video stream (stream.Readable) */
-const video_stream = webcam.streamWebcam('/dev/video0', encoder);
+const videoStream = webcam.streamWebcam('/dev/video0', encoder);
 ```
 
 # Default REST API
