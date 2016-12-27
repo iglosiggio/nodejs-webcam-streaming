@@ -98,7 +98,7 @@ function defaultPage(req, res, req_url) {
 function fillDefaults(obj, defaults) {
   for(var key in defaults) {
     if(obj[key] === undefined)
-      obj[key] = defaults;
+      obj[key] = defaults[key];
   }
   return obj;
 }
@@ -144,7 +144,6 @@ const createHTTPStreamingServer = exports.createHTTPStreamingServer = ({
 } = {}) => {
  additionalEndpoints[webcamEndpoint] = (req, res, reqUrl) => {
    const webcam = reqUrl.query.webcam;
-   fillDefaults(encoder, defaultEncoder);
 
    isValidWebcam(webcam).then(
      () => streamWebcam(webcam, encoder).then(
@@ -160,6 +159,7 @@ const createHTTPStreamingServer = exports.createHTTPStreamingServer = ({
  };
 
  additionalEndpoints.default = additionalEndpoints.default || defaultPage;
+ fillDefaults(encoder, defaultEncoder);
 
  if(permittedWebcams) {
    isValidWebcam = isValidWebcamWhitelist(permittedWebcams);
