@@ -105,7 +105,7 @@ function fillDefaults(obj, defaults) {
 
 function message(res, code, ...args) {
   const response = messages[code].apply(message, args);
-  res.writeHead(200, { 'Content-Type': 'application/json' });
+  res.writeHead(response.http_code, { 'Content-Type': 'application/json' });
   res.end(response);
 }
 
