@@ -1,4 +1,12 @@
-const json = JSON.stringify;
+function json(object) {
+  const stringified = JSON.stringify(object);
+  const rval = {
+    toString() { return this.string }
+  };
+
+  Object.setPrototypeOf(rval, object);
+  return rval;
+}
 
 exports.webcam_in_use = (webcam) => json({
   http_code: 500,
