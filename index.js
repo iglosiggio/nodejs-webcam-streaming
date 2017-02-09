@@ -154,6 +154,8 @@ const createHTTPStreamingServer = exports.createHTTPStreamingServer = ({
          video.pipe(res);
 
          res.on('close', () => encoderProcess.kill('SIGTERM'));
+         /* Sometimes the client disconnects but the encoder keeps running :\ */
+         res.connection.on('close', () => encoderProcess.kill('SIGTERM'));
        }, () => message(res, 'webcam_in_use', webcam)),
      () => message(res, 'invalid_webcam', webcam));
  };
