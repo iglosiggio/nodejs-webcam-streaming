@@ -93,7 +93,7 @@ const server = webcam.createHTTPStreamingServer({
         fileExists(webcam).then(accept, reject);
       }
     });
-  }
+  },
   /*
    * The endpoint for requesting streams of the REST api
    *   Defaults to '/webcam'
